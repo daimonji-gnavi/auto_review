@@ -304,14 +304,37 @@ curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
   | jq '{id, body, created_at}'
 ```
 
-**詳細レビューコメント（推奨）:**
+**詳細レビューコメント(推奨):**
 ```bash
+# レビュー結果をファイルに保存
+REVIEW_FILE="reviews/review_mr${MR_NUMBER}.md"
+cat > "$REVIEW_FILE" << 'EOF'
+## レビュー完了
+
+### 変更内容
+- [主な変更内容を箇条書き]
+
+### 主な機能
+1. [機能1の説明]
+2. [機能2の説明]
+
+### 評価
+- ✅ [良い点1]
+- ✅ [良い点2]
+
+**問題点:** なし(または具体的な指摘)
+
+承認いたしました。実装お疲れさまでした!
+EOF
+
+echo "レビュー結果を保存: $REVIEW_FILE"
+
+# GitLabにコメント投稿
+REVIEW_BODY=$(cat "$REVIEW_FILE")
 curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{
-    "body": "## レビュー完了\n\n### 変更内容\n- [主な変更内容を箇条書き]\n\n### 主な機能\n1. [機能1の説明]\n2. [機能2の説明]\n\n### 評価\n- ✅ [良い点1]\n- ✅ [良い点2]\n\n**問題点:** なし（または具体的な指摘）\n\n承認いたしました。実装お疲れさまでした！"
-  }' \
-  "https://gitlab101.gnavi.co.jp/api/v4/projects/rpa_dev%2Fgmb_batch/merge_requests/434/notes" \
+  -d "$(jq -n --arg body "$REVIEW_BODY" '{body: $body}')" \
+  "https://gitlab101.gnavi.co.jp/api/v4/projects/rpa_dev%2Fgmb_batch/merge_requests/${MR_NUMBER}/notes" \
   | jq '{id, created_at}'
 ```
 
@@ -662,7 +685,23 @@ cat /tmp/test_items.json | jq -r '.[] | .["テスト観点"]' | sort | uniq -c
 
 **7-3. レビュー結果のまとめとレビュー管理表の更新**
 
-テストカバレッジレビュー結果をMarkdown形式で整理:
+テストカバレッジレビュー結果をMarkdown形式で整理し、`reviews/`ディレクトリに保存:
+
+```bash
+# レビュー結果をファイルに保存
+REVIEW_FILE="reviews/mr${MR_NUMBER}_coverage_analysis.md"
+cat > "$REVIEW_FILE" << 'EOF'
+## MR#${MR_NUMBER} テストカバレッジ分析結果
+
+### 実装されている主要機能
+[分析内容を記載]
+
+### カバレッジ分析
+[分析結果を記載]
+EOF
+
+echo "レビュー結果を保存: $REVIEW_FILE"
+```
 
 **重要:** レビュー結果に応じてレビュー管理表のステータスを更新してください。
 
@@ -684,8 +723,12 @@ php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイ
   "完了"
 ```
 
-```markdown
-## MR#XX テストカバレッジ分析結果
+レビュー結果を`reviews/`ディレクトリに保存:
+
+```bash
+REVIEW_FILE="reviews/mr${MR_NUMBER}_coverage_analysis.md"
+cat > "$REVIEW_FILE" << 'EOF'
+## MR#${MR_NUMBER} テストカバレッジ分析結果
 
 ### 実装されている主要機能
 - [機能1]: [ソースファイル名]
@@ -727,6 +770,9 @@ php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイ
 **推奨追加テスト数: X項目**
 
 **結論**: [総評]
+EOF
+
+echo "レビュー結果を保存: $REVIEW_FILE"
 ```
 
 #### 8. レビュー完了処理
