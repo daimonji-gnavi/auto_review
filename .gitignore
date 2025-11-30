@@ -1,0 +1,21 @@
+# 一時ファイル
+*.json
+/tmp/
+
+# レビュー結果ファイル
+mr*_coverage_analysis.md
+review_mr*.md
+
+# 認証情報
+*_credentials.txt
+*_token*.json
+
+# macOS
+.DS_Store
+
+# エディタ
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
