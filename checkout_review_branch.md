@@ -6,7 +6,11 @@
 ## 前提条件
 - 環境変数 `GITLAB_API_TOKEN` が設定されていること
 - Google Sheets API トークンが設定済みであること（`.github/scripts/refresh_token.php`）
-- ワークスペースのルートディレクトリが `/Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos` であること
+- 環境変数 `WORKSPACE_ROOT` にワークスペースのルートディレクトリを設定すること
+  ```bash
+  # 例: ~/.bashrc または ~/.bash_profile に追加
+  export WORKSPACE_ROOT="/Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos"
+  ```
 
 ## レビュー管理表からの情報取得と分岐
 
@@ -25,7 +29,7 @@
 **1-2. レビュー管理表の取得と優先順位付け**
 
 ```bash
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/.github/scripts
+cd ${WORKSPACE_ROOT}/.github/scripts
 
 # トークン更新
 php refresh_token.php
@@ -123,7 +127,7 @@ REVIEW_NUMBER="1030"
 REVIEWER="daimonji"  # または "大文字亮"
 STATUS="返信待ち"     # または "完了"
 
-php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/temp/20251130review/update_review_status.php \
+php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -170,7 +174,7 @@ GitLabプロジェクトパス `rpa_dev/gmb_batch` から、リポジトリ名 `
 
 ```bash
 # ワークスペースルートに移動
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos
+cd ${WORKSPACE_ROOT}
 
 # リポジトリを検索
 find . -type d -name "gmb_batch" 2>/dev/null
@@ -217,11 +221,11 @@ work/fix_monitoring_ranking_report_oki-ta_PB-10849
 
 ```bash
 # ワークスペースルートから移動
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos
+cd ${WORKSPACE_ROOT}
 cd gbp/gmb_batch
 
 # または絶対パスで直接移動
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/gbp/gmb_batch
+cd ${WORKSPACE_ROOT}/gbp/gmb_batch
 ```
 
 #### 4-2. リモートブランチの取得
@@ -275,7 +279,7 @@ curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
 
 ```bash
 # カバレッジ不足などで開発者へ質問・返信を求める場合
-php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/temp/20251130review/update_review_status.php \
+php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -283,7 +287,7 @@ php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイ
   "返信待ち"
 
 # レビュー完了・承認済みの場合
-php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/temp/20251130review/update_review_status.php \
+php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -367,7 +371,7 @@ curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
 # レビュー対象URLからブランチをチェックアウト
 
 REVIEW_URL="$1"
-WORKSPACE_ROOT="/Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos"
+WORKSPACE_ROOT="${WORKSPACE_ROOT}"  # 環境変数を使用
 
 # URLからプロジェクトパスとMR番号を抽出
 PROJECT_PATH=$(echo "$REVIEW_URL" | sed -n 's|https://gitlab101.gnavi.co.jp/\([^/]*/[^/]*\)/-/merge_requests/.*|\1|p')
@@ -431,7 +435,7 @@ git log --oneline -5
 
 **解決策:**
 1. 最新版の `update_review_status.php` を使用(全シート検索版)
-2. スクリプトの場所: `/Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/temp/20251130review/update_review_status.php`
+2. スクリプトの場所: `${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php`
 
 **確認方法:**
 ```bash
@@ -448,7 +452,7 @@ cat /tmp/sheet_full.json | jq -r 'to_entries[] | select(.value[0] == "1030") | "
 
 **解決策:**
 ```bash
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/.github/scripts
+cd ${WORKSPACE_ROOT}/.github/scripts
 php refresh_token.php
 # 出力: Token refreshed successfully
 ```
@@ -509,7 +513,7 @@ https://docs.google.com/spreadsheets/d/1mJ.../edit#gid=1704186406
 **2-3. ハイパーリンク情報を抽出**
 
 ```bash
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/.github/scripts
+cd ${WORKSPACE_ROOT}/.github/scripts
 
 # トークン更新
 php refresh_token.php
@@ -545,7 +549,7 @@ echo "MR番号: $MR_NUMBER"           # 29
 REPO_NAME=$(basename "$PROJECT_PATH")  # react
 
 # ワークスペース内でリポジトリを検索
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos
+cd ${WORKSPACE_ROOT}
 REPO_PATH=$(find . -type d -name "$REPO_NAME" -print -quit 2>/dev/null)
 
 # リポジトリディレクトリに移動
@@ -612,7 +616,7 @@ cat package.json | jq '{dependencies, devDependencies}'
 **6-1. テスト項目書の全体構造を確認**
 
 ```bash
-cd /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/.github/scripts
+cd ${WORKSPACE_ROOT}/.github/scripts
 
 # テスト項目書の内容を取得
 php spreadsheet_simple.php "<spreadsheetId>" "<gid>" > /tmp/test_items.json
@@ -707,7 +711,7 @@ echo "レビュー結果を保存: $REVIEW_FILE"
 
 ```bash
 # カバレッジ不足があり、開発者へ追加テスト依頼する場合
-php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/temp/20251130review/update_review_status.php \
+php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -715,7 +719,7 @@ php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイ
   "返信待ち"
 
 # テストカバレッジが十分で、承認する場合
-php /Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos/temp/20251130review/update_review_status.php \
+php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -803,7 +807,7 @@ SPREADSHEET_ID="$1"
 SHEET_GID="$2"
 LINK_CELL_RANGE="$3"  # 例: "5:5"（C5セル）
 
-WORKSPACE_ROOT="/Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos"
+WORKSPACE_ROOT="${WORKSPACE_ROOT}"  # 環境変数を使用
 SCRIPTS_DIR="$WORKSPACE_ROOT/.github/scripts"
 
 cd "$SCRIPTS_DIR" || exit 1
