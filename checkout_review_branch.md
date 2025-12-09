@@ -11,6 +11,14 @@
   # 例: ~/.bashrc または ~/.bash_profile に追加
   export WORKSPACE_ROOT="/Users/daimonji/Library/CloudStorage/GoogleDrive-daimonji@gnavi.co.jp/マイドライブ/10Git4win/repos"
   ```
+- 環境変数 `REVIEW_PROCEDURE_DIR` にこの手順書MDファイルのディレクトリを設定（自動設定推奨）
+  ```bash
+  # この手順書MDファイルのディレクトリを自動取得
+  REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+  # または手動設定
+  export REVIEW_PROCEDURE_DIR="${WORKSPACE_ROOT}/temp/20251130review"
+  ```
+- シェル操作 自動承認を阻害するため、`2>/dev/null`を避けること。
 
 ## レビュー管理表からの情報取得と分岐
 
@@ -29,20 +37,21 @@
 **1-2. レビュー管理表の取得と優先順位付け**
 
 ```bash
-cd ${WORKSPACE_ROOT}/.github/scripts
+# この手順書と同じディレクトリを基準にする
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
 # トークン更新
-php refresh_token.php
+php ${WORKSPACE_ROOT}/.github/scripts/refresh_token.php
 
 # レビュー担当者大文字亮（U列）が「未確認」の項目を取得
-# 期日昇順でソート済み
-php get_daimonji_review.php > /tmp/daimonji_reviews.json
+# 希望期日昇順でソート済み（スクリプトは手順書と同じディレクトリ）
+php "${REVIEW_PROCEDURE_DIR}/get_daimonji_review.php" > /tmp/daimonji_reviews.json
 
 # 取得した件数を確認
 REVIEW_COUNT=$(cat /tmp/daimonji_reviews.json | jq 'length')
 echo "レビュー対象: ${REVIEW_COUNT}件"
 
-# 先頭の項目（最も期日が近い）を表示
+# 先頭の項目（最も希望期日が古い）を表示
 cat /tmp/daimonji_reviews.json | jq '.[0] | {番号, レビュー種別, 対象, 期日, 状態}'
 ```
 
@@ -62,7 +71,7 @@ cat /tmp/daimonji_reviews.json | jq '.[0] | {番号, レビュー種別, 対象,
 期日順に並んだリストから、対象を選択（通常は先頭の項目）：
 
 ```bash
-# 先頭の項目を取得（最優先）
+# 先頭の項目（最も希望期日が古い）を取得（最優先）
 cat /tmp/daimonji_reviews.json | jq '.[0]' > /tmp/target_review.json
 
 # または、番号を指定して取得
@@ -80,6 +89,7 @@ echo "レビュー種別: $REVIEW_TYPE"
 echo "対象: $TARGET_NAME"
 echo "URL: $REVIEW_URL"
 ```
+対象が決まったらchat上にも表示する
 
 ### 2. レビュー種別による分岐
 
@@ -127,7 +137,9 @@ REVIEW_NUMBER="1030"
 REVIEWER="daimonji"  # または "大文字亮"
 STATUS="返信待ち"     # または "完了"
 
-php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
+# この手順書と同じディレクトリのスクリプトを使用
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -170,14 +182,21 @@ GitLabプロジェクトパス `rpa_dev/gmb_batch` から、リポジトリ名 `
 
 #### 2-2. ワークスペース内でディレクトリ検索
 
-**重要:** 必ずワークスペースルートディレクトリから実行すること
+**重要:** 必ずワークスペースルートディレクトリから検索すること
 
 ```bash
-# ワークスペースルートに移動
+# ワークスペースルートからリポジトリを検索
+REPO_NAME="gmb_batch"
 cd ${WORKSPACE_ROOT}
+REPO_PATH=$(find . -type d -name "${REPO_NAME}" -print -quit 2>/dev/null)
 
-# リポジトリを検索
-find . -type d -name "gmb_batch" 2>/dev/null
+if [ -z "$REPO_PATH" ]; then
+    echo "エラー: リポジトリが見つかりません: ${REPO_NAME}"
+    exit 1
+fi
+
+# 見つかったパスを表示
+echo "見つかったリポジトリ: ${REPO_PATH}"
 ```
 
 **プロジェクト構造の対応例:**
@@ -248,70 +267,27 @@ git checkout work/fix_monitoring_ranking_report_oki-ta_PB-10849
 git log --oneline -5
 ```
 
-### 5. マージリクエストの承認とコメント追加
+### 5. レビュー内容の作成とコメント追加
 
-#### 5-1. マージリクエストを承認（Approve）
+#### 5-1. レビュー内容の作成（MDファイル）
+
+**重要:** 先にレビュー内容を作成し、チャットで提示してユーザー確認後にMDファイル保存・MRコメント・承認の順で実施
+
+**レビュー手順:**
+1. 変更内容を分析してレビュー結果のMarkdownを作成
+2. チャットでレビュー内容を提示してユーザー確認
+3. ユーザー承認後、MDファイルを保存
+4. MRへコメント投稿
+5. MR承認
+6. 管理表のステータス更新
+
+**詳細レビューコメント作成:
 ```bash
-curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
-  "https://gitlab101.gnavi.co.jp/api/v4/projects/rpa_dev%2Fgmb_batch/merge_requests/434/approve" \
-  | jq '{user_has_approved, approved, approved_by}'
-```
+# この手順書と同じディレクトリを基準にする
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-**レスポンス例:**
-```json
-{
-  "user_has_approved": true,
-  "approved": true,
-  "approved_by": [
-    {
-      "user": {
-        "name": "DAIMONJI Ryo",
-        "username": "daimonji"
-      }
-    }
-  ]
-}
-```
-
-#### 5-2. レビュー管理表のステータス更新
-
-**MRを承認した後、必ずレビュー管理表のステータスを更新してください。**
-
-```bash
-# カバレッジ不足などで開発者へ質問・返信を求める場合
-php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
-  19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
-  1895963193 \
-  "$REVIEW_NUMBER" \
-  daimonji \
-  "返信待ち"
-
-# レビュー完了・承認済みの場合
-php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
-  19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
-  1895963193 \
-  "$REVIEW_NUMBER" \
-  daimonji \
-  "完了"
-```
-
-#### 5-3. マージリクエストにコメントを追加
-
-**重要:** レビュー内容を詳細に記載すること
-
-**基本コメント（簡潔版）:**
-```bash
-curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"body": "確認いたしました。ご対応ありがとうございます！"}' \
-  "https://gitlab101.gnavi.co.jp/api/v4/projects/rpa_dev%2Fgmb_batch/merge_requests/434/notes" \
-  | jq '{id, body, created_at}'
-```
-
-**詳細レビューコメント(推奨):**
-```bash
-# レビュー結果をファイルに保存
-REVIEW_FILE="reviews/review_mr${MR_NUMBER}.md"
+# レビュー結果を手順書と同じディレクトリのreviews/配下に保存
+REVIEW_FILE="${REVIEW_PROCEDURE_DIR}/reviews/review_mr${MR_NUMBER}.md"
 cat > "$REVIEW_FILE" << 'EOF'
 ## レビュー完了
 
@@ -360,9 +336,79 @@ curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
 **チャット表示用の要約:**
 レビューコメントと同じ内容をチャットにも出力し、ユーザーに確認してもらうこと。
 
+#### 5-2. MDファイルの保存とMRコメント投稿
 
+**ユーザー承認後に実施:**
 
-## 自動化スクリプト例
+```bash
+# この手順書と同じディレクトリを基準にする
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# レビュー結果を手順書と同じディレクトリのreviews/配下に保存
+REVIEW_FILE="${REVIEW_PROCEDURE_DIR}/reviews/review_mr${MR_NUMBER}.md"
+# (内容は既に作成済み)
+
+echo "レビュー結果を保存: $REVIEW_FILE"
+
+# GitLabにコメント投稿
+REVIEW_BODY=$(cat "$REVIEW_FILE")
+curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg body "$REVIEW_BODY" '{body: $body}')" \
+  "https://gitlab101.gnavi.co.jp/api/v4/projects/rpa_dev%2Fgmb_batch/merge_requests/${MR_NUMBER}/notes" \
+  | jq '{id, created_at}'
+```
+
+#### 5-3. マージリクエストを承認（Approve）
+
+**MRコメント投稿後に実施:**
+
+```bash
+curl -s -X POST -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+  "https://gitlab101.gnavi.co.jp/api/v4/projects/rpa_dev%2Fgmb_batch/merge_requests/434/approve" \
+  | jq '{user_has_approved, approved, approved_by}'
+```
+
+**レスポンス例:**
+```json
+{
+  "user_has_approved": true,
+  "approved": true,
+  "approved_by": [
+    {
+      "user": {
+        "name": "DAIMONJI Ryo",
+        "username": "daimonji"
+      }
+    }
+  ]
+}
+```
+
+#### 5-4. レビュー管理表のステータス更新
+
+**MRを承認した後、必ずレビュー管理表のステータスを更新してください。**
+
+```bash
+# この手順書と同じディレクトリのスクリプトを使用
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# カバレッジ不足などで開発者へ質問・返信を求める場合
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
+  19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
+  1895963193 \
+  "$REVIEW_NUMBER" \
+  daimonji \
+  "返信待ち"
+
+# レビュー完了・承認済みの場合
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
+  19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
+  1895963193 \
+  "$REVIEW_NUMBER" \
+  daimonji \
+  "完了"
+```
 
 **重要:** スクリプト実行前に必ずワークスペースルートに移動すること
 
@@ -435,7 +481,7 @@ git log --oneline -5
 
 **解決策:**
 1. 最新版の `update_review_status.php` を使用(全シート検索版)
-2. スクリプトの場所: `${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php`
+2. スクリプトの場所: この手順書と同じディレクトリの `update_review_status.php`
 
 **確認方法:**
 ```bash
@@ -452,8 +498,7 @@ cat /tmp/sheet_full.json | jq -r 'to_entries[] | select(.value[0] == "1030") | "
 
 **解決策:**
 ```bash
-cd ${WORKSPACE_ROOT}/.github/scripts
-php refresh_token.php
+php ${WORKSPACE_ROOT}/.github/scripts/refresh_token.php
 # 出力: Token refreshed successfully
 ```
 
@@ -471,6 +516,268 @@ php refresh_token.php
 - MRがマージ済みまたはクローズ済みの可能性
 - ブランチが削除されている可能性
 - リモートリポジトリを最新化: `git fetch --all --prune`
+
+## 6. 修正が必要な場合の修正提案手順
+
+### 概要
+レビュー時に改善が必要な箇所が見つかった場合、単にMRを「返信待ち」にするのではなく、修正内容を反映した**修正提案ブランチ**を作成して提示します。これにより、開発者は提案内容を直接確認でき、議論がスムーズになります。
+
+### 修正提案ブランチの命名規則
+
+修正提案ブランチは元のブランチ名に `_review` をサフィックスとして付与します。
+
+**パターン:**
+```
+{元のブランチ名}_review
+```
+
+**例:**
+- 元のブランチ: `work/meo_report_second_phase_nozaki-yo_DAIKO_PB-10786`
+- 修正提案ブランチ: `work/meo_report_second_phase_nozaki-yo_DAIKO_PB-10786_review`
+
+### 修正提案ブランチの作成と修正手順
+
+#### 6-1. 修正前の準備
+
+```bash
+# 現在のブランチを確認
+git branch --show-current
+
+# 修正提案ブランチを作成
+ORIGINAL_BRANCH=$(git branch --show-current)
+REVIEW_BRANCH="${ORIGINAL_BRANCH}_review"
+
+git checkout -b "$REVIEW_BRANCH"
+
+echo "修正提案ブランチを作成: $REVIEW_BRANCH"
+```
+
+#### 6-2. コード修正の実施
+
+修正提案ブランチ上でコードを修正します。修正内容の例：
+
+1. **重複するロジックの統合**
+   - 繰り返される処理を共通メソッドに抽出
+   - 複数の同じパターンを関数化
+
+2. **初期化処理の最適化**
+   - 関数の開始時に変数を一括初期化
+   - 複数のearly returnで同じ初期化を避ける
+
+3. **条件分岐の簡潔化**
+   - 長いif-else構文をメソッド抽出
+   - 関数型プログラミング（array_map等）の活用
+
+4. **設定値の定数化**
+   - ハードコードされた配列を定数として定義
+   - 複数箇所で使用される文字列を定数化
+
+**修正ファイルの確認:**
+```bash
+# 修正内容を確認
+git diff origin/master HEAD
+
+# 特定ファイルのみ確認
+git diff origin/master HEAD -- ファイルパス
+```
+
+#### 6-3. コミットの作成
+
+修正内容をコミットします。複数の修正がある場合は、関連する修正ごとにコミットを分割することを推奨します。
+
+```bash
+# ステージングと確認
+git add ファイルパス
+git status
+
+# コミット（修正内容を簡潔に説明）
+git commit -m "リファクタリング: 配列処理を関数化
+
+- formatCompetitiveKeywordDailyData()でarray_column/array_mapを活用
+- 重複するforeachループを統合"
+
+# または、複数のコミットに分割
+git commit -m "初期化: 結果配列をメソッド開始時に初期化"
+git commit -m "メソッド抽出: if/else分岐の処理をメソッド化"
+git commit -m "共通メソッド: 検索ロジックを統合"
+git commit -m "定数化: テーブルヘッダーをクラス定数に変更"
+```
+
+#### 6-4. リモートにプッシュ
+
+修正提案ブランチをリモートリポジトリにプッシュします。
+
+```bash
+REVIEW_BRANCH=$(git branch --show-current)
+
+git push origin "$REVIEW_BRANCH"
+
+# 出力例:
+# remote: To create a merge request for work/meo_report_second_phase_nozaki-yo_DAIKO_PB-10786_review, visit:
+# remote:   https://gitlab101.gnavi.co.jp/daiko/app/-/merge_requests/new?merge_request%5Bsource_branch%5D=work%2Fmeo_report_second_phase_nozaki-yo_DAIKO_PB-10786_review
+```
+
+### 修正提案をMRにコメントとして投稿
+
+#### 6-5. 修正提案コメントの作成
+
+修正内容をMarkdownで作成し、元のMRにコメントとして投稿します。
+
+```bash
+# ワークスペースルートに移動
+cd ${WORKSPACE_ROOT}
+
+# 修正内容の統計を取得
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+ORIGINAL_BRANCH="work/meo_report_second_phase_nozaki-yo_DAIKO_PB-10786"
+REVIEW_BRANCH="${ORIGINAL_BRANCH}_review"
+
+# 修正差分を取得
+git diff "origin/${ORIGINAL_BRANCH}"..origin/"${REVIEW_BRANCH}" --stat > /tmp/diff_stat.txt
+
+# 変更ファイル数と行数を抽出
+CHANGES=$(cat /tmp/diff_stat.txt | tail -1)
+echo "変更統計: $CHANGES"
+```
+
+**修正提案コメントのテンプレート:**
+
+```markdown
+## コードレビュー結果
+
+修正提案があります。以下のブランチで改善内容を確認いただけます。
+
+### 修正提案ブランチ
+`{修正ブランチ名}`
+
+{修正提案ブランチのURL}
+
+### 改善内容
+
+#### 1. {改善項目1}
+- {具体的な改善内容}
+
+#### 2. {改善項目2}
+- {具体的な改善内容}
+
+#### 3. {改善項目3}
+- {具体的な改善内容}
+
+#### 4. {改善項目4}
+- {具体的な改善内容}
+
+### 変更統計
+- 1 file changed, XXX insertions(+), YYY deletions(-)
+
+{改善内容の詳細説明}
+
+### 対応可能な内容
+提案内容に同意いただけた場合は、以下のいずれかの対応をお願いします：
+
+**1. 修正提案ブランチの内容をそのままマージ**
+- 修正提案ブランチを元のブランチに統合
+
+**2. 修正提案ブランチをベースに追加修正**
+- 提案内容を参考にさらに改善
+
+**3. 修正内容の一部を採用**
+- 合意した改善のみ適用
+
+ご指示をお待ちしています。
+```
+
+#### 6-6. コメントをMRに投稿
+
+```bash
+# 修正提案コメント本文を作成
+REVIEW_BODY="## コードレビュー結果\n\n修正提案があります。以下のブランチで改善内容を確認いただけます。\n\n### 修正提案ブランチ\n\`${REVIEW_BRANCH}\`\n\nhttps://gitlab101.gnavi.co.jp/{プロジェクト}/app/-/tree/${REVIEW_BRANCH}\n\n### 改善内容\n\n#### 1. 配列処理の最適化\n- foreachループをarray_column/array_mapで簡潔化\n\n#### 2. メソッド抽出\n- 長いif-else分岐を専用メソッドに抽出\n- buildDisplayRowsWithBenchmark() / buildDisplayRowsWithoutBenchmark()\n\n#### 3. 共通メソッド化\n- 重複する配列検索ロジックをfindRecordByKeyValue()に統合\n\n#### 4. 定数化\n- テーブルヘッダー定義をRIVAL_REVIEW_TABLE_HEADER定数に変更\n\n### 変更統計\n- 1 file changed, 159 insertions(+), 111 deletions(-)"
+
+# GitLabにコメント投稿
+PROJECT_PATH_ENCODED="daiko%2Fapp"
+MR_NUMBER="55"
+
+curl -X POST \
+  "https://gitlab101.gnavi.co.jp/api/v4/projects/${PROJECT_PATH_ENCODED}/merge_requests/${MR_NUMBER}/notes" \
+  -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg body "$REVIEW_BODY" '{body: $body}')"
+```
+
+**重要:** Bashでの複数行テキストとJSON処理時は、`jq`で正確にエスケープ処理してください。
+
+### 6-7. ステータスを「返信待ち」に更新
+
+修正提案を投稿したら、レビュー管理表の `大文字亮` 列を「返信待ち」に更新します。
+
+```bash
+# この手順書と同じディレクトリを基準にする
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# REVIEW_NUMBER を対象番号に置き換える
+REVIEW_NUMBER="1052"
+
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
+  19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
+  1895963193 \
+  "${REVIEW_NUMBER}" \
+  daimonji \
+  "返信待ち"
+```
+
+**ポイント:**
+- 修正提案のコメントをMRへ投稿した直後に実行する。
+
+
+### 修正提案ブランチが承認された場合の対応
+
+開発者が修正提案ブランチをマージした場合：
+
+```bash
+# 1. 元のブランチに修正提案の内容が反映されたことを確認
+git fetch origin
+git log origin/{元のブランチ名} --oneline -5
+
+# 2. 修正提案ブランチを削除（ローカル）
+git branch -d {修正提案ブランチ名}
+
+# 3. リモートの修正提案ブランチを削除
+git push origin --delete {修正提案ブランチ名}
+
+# 4. レビュー管理表のステータスを「完了」に更新
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
+  19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
+  1895963193 \
+  "${REVIEW_NUMBER}" \
+  daimonji \
+  "完了"
+```
+
+### トラブルシューティング
+
+#### 修正提案ブランチの作成に失敗した
+```bash
+# ローカルブランチの状態を確認
+git branch -a | grep review
+
+# 既存の修正提案ブランチを削除して再作成
+git branch -D {修正提案ブランチ名}
+git checkout -b {修正提案ブランチ名}
+```
+
+#### コメント投稿時にJSON エスケープエラーが発生
+- Markdownの改行は `\n` で表現
+- ダブルクォートは `\"` にエスケープ
+- `jq -n` で自動エスケープさせる
+
+#### 修正提案ブランチがリモートに反映されない
+```bash
+# プッシュ状態を確認
+git push origin {修正提案ブランチ名} -v
+
+# リモートブランチを確認
+git branch -r | grep {修正提案ブランチ名}
+```
 
 ## テスト項目書（スプレッドシート）のレビュー手順
 
@@ -513,13 +820,11 @@ https://docs.google.com/spreadsheets/d/1mJ.../edit#gid=1704186406
 **2-3. ハイパーリンク情報を抽出**
 
 ```bash
-cd ${WORKSPACE_ROOT}/.github/scripts
-
 # トークン更新
-php refresh_token.php
+php ${WORKSPACE_ROOT}/.github/scripts/refresh_token.php
 
 # C5セルのハイパーリンクを取得（例）
-php spreadsheet_hyperlinks.php "<spreadsheetId>" "<gid>" "5:5" | jq -r '.cells[] | select(.col == 3) | .hyperlink'
+php ${WORKSPACE_ROOT}/.github/scripts/spreadsheet_hyperlinks.php "<spreadsheetId>" "<gid>" "5:5" | jq -r '.cells[] | select(.col == 3) | .hyperlink'
 ```
 
 **出力例:**
@@ -616,10 +921,8 @@ cat package.json | jq '{dependencies, devDependencies}'
 **6-1. テスト項目書の全体構造を確認**
 
 ```bash
-cd ${WORKSPACE_ROOT}/.github/scripts
-
 # テスト項目書の内容を取得
-php spreadsheet_simple.php "<spreadsheetId>" "<gid>" > /tmp/test_items.json
+php ${WORKSPACE_ROOT}/.github/scripts/spreadsheet_simple.php "<spreadsheetId>" "<gid>" > /tmp/test_items.json
 
 # テスト項目数を確認
 cat /tmp/test_items.json | jq 'length'
@@ -689,11 +992,14 @@ cat /tmp/test_items.json | jq -r '.[] | .["テスト観点"]' | sort | uniq -c
 
 **7-3. レビュー結果のまとめとレビュー管理表の更新**
 
-テストカバレッジレビュー結果をMarkdown形式で整理し、`reviews/`ディレクトリに保存:
+テストカバレッジレビュー結果をMarkdown形式で整理し、手順書と同じディレクトリの`reviews/`配下に保存:
 
 ```bash
-# レビュー結果をファイルに保存
-REVIEW_FILE="reviews/mr${MR_NUMBER}_coverage_analysis.md"
+# この手順書と同じディレクトリを基準にする
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# レビュー結果を手順書と同じディレクトリのreviews/配下に保存
+REVIEW_FILE="${REVIEW_PROCEDURE_DIR}/reviews/mr${MR_NUMBER}_coverage_analysis.md"
 cat > "$REVIEW_FILE" << 'EOF'
 ## MR#${MR_NUMBER} テストカバレッジ分析結果
 
@@ -710,8 +1016,11 @@ echo "レビュー結果を保存: $REVIEW_FILE"
 **重要:** レビュー結果に応じてレビュー管理表のステータスを更新してください。
 
 ```bash
+# この手順書と同じディレクトリのスクリプトを使用
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
 # カバレッジ不足があり、開発者へ追加テスト依頼する場合
-php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -719,7 +1028,7 @@ php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   "返信待ち"
 
 # テストカバレッジが十分で、承認する場合
-php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
+php "${REVIEW_PROCEDURE_DIR}/update_review_status.php" \
   19br2ZMGjh986ko_HdFMxetkJVcYPd6-Wg6FMv8hd9hM \
   1895963193 \
   "$REVIEW_NUMBER" \
@@ -727,10 +1036,13 @@ php ${WORKSPACE_ROOT}/temp/20251130review/update_review_status.php \
   "完了"
 ```
 
-レビュー結果を`reviews/`ディレクトリに保存:
+レビュー結果を手順書と同じディレクトリの`reviews/`配下に保存:
 
 ```bash
-REVIEW_FILE="reviews/mr${MR_NUMBER}_coverage_analysis.md"
+# この手順書と同じディレクトリを基準にする
+REVIEW_PROCEDURE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+REVIEW_FILE="${REVIEW_PROCEDURE_DIR}/reviews/mr${MR_NUMBER}_coverage_analysis.md"
 cat > "$REVIEW_FILE" << 'EOF'
 ## MR#${MR_NUMBER} テストカバレッジ分析結果
 
@@ -808,17 +1120,15 @@ SHEET_GID="$2"
 LINK_CELL_RANGE="$3"  # 例: "5:5"（C5セル）
 
 WORKSPACE_ROOT="${WORKSPACE_ROOT}"  # 環境変数を使用
-SCRIPTS_DIR="$WORKSPACE_ROOT/.github/scripts"
-
-cd "$SCRIPTS_DIR" || exit 1
+SCRIPTS_DIR="${WORKSPACE_ROOT}/.github/scripts"
 
 # 1. トークン更新
 echo "=== Google Sheets APIトークン更新 ==="
-php refresh_token.php
+php "${SCRIPTS_DIR}/refresh_token.php"
 
 # 2. MRリンクを取得
 echo "=== MRリンク取得 ==="
-MR_URL=$(php spreadsheet_hyperlinks.php "$SPREADSHEET_ID" "$SHEET_GID" "$LINK_CELL_RANGE" \
+MR_URL=$(php "${SCRIPTS_DIR}/spreadsheet_hyperlinks.php" "$SPREADSHEET_ID" "$SHEET_GID" "$LINK_CELL_RANGE" \
   | jq -r '.cells[] | select(.hyperlink != null) | .hyperlink' | head -1)
 
 if [ -z "$MR_URL" ]; then
@@ -837,7 +1147,7 @@ echo "MR番号: $MR_NUMBER"
 
 # 4. リポジトリを検索してチェックアウト
 REPO_NAME=$(basename "$PROJECT_PATH")
-cd "$WORKSPACE_ROOT" || exit 1
+cd "${WORKSPACE_ROOT}" || exit 1
 REPO_PATH=$(find . -type d -name "$REPO_NAME" -print -quit 2>/dev/null)
 
 if [ -z "$REPO_PATH" ]; then
@@ -845,7 +1155,9 @@ if [ -z "$REPO_PATH" ]; then
     exit 1
 fi
 
-cd "$REPO_PATH" || exit 1
+# 絶対パスに変換
+REPO_FULL_PATH="${WORKSPACE_ROOT}/${REPO_PATH#./}"
+cd "$REPO_FULL_PATH" || exit 1
 
 # 5. ブランチ取得とチェックアウト
 PROJECT_PATH_ENCODED=$(echo "$PROJECT_PATH" | sed 's/\//%2F/g')
@@ -864,7 +1176,7 @@ git diff origin/master..HEAD --stat
 
 # 7. テスト項目書を取得
 echo "=== テスト項目書取得 ==="
-php "$SCRIPTS_DIR/spreadsheet_simple.php" "$SPREADSHEET_ID" "$SHEET_GID" > /tmp/test_items.json
+php "${SCRIPTS_DIR}/spreadsheet_simple.php" "$SPREADSHEET_ID" "$SHEET_GID" > /tmp/test_items.json
 TEST_COUNT=$(cat /tmp/test_items.json | jq 'length')
 echo "テスト項目数: $TEST_COUNT"
 
